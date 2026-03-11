@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>食品価格推移トラッカー（e-Stat）</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Hiragino Sans', 'Meiryo', 'Segoe UI', sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+    header {
+      background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%);
+      border-bottom: 1px solid #1e40af44;
+      padding: 1.4rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    header .logo { font-size: 2rem; }
+    header h1 { font-size: 1.4rem; font-weight: 700; color: #93c5fd; }
+    header p { font-size: 0.8rem; color: #64748b; margin-top: 0.2rem; }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 1.4rem 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .card-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 1rem;
+    }
+
+    .row {
+      display: flex;
+      align-items: flex-end;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .field { display: flex; flex-direction: column; gap: 0.4rem; }
+    .field.grow { flex: 1; min-width: 180px; }
+
+    label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    input[type="text"], input[type="number"], select {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #e2e8f0;
+      padding: 0.6rem 0.9rem;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+      width: 100%;
+    }
+    input:focus, select:focus { border-color: #3b82f6; }
+    select option { background: #1e293b; }
+    select:disabled { opacity: 0.5; }
+
+    .btn {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      padding: 0.65rem 1.4rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      white-space: nowrap;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn.secondary {
+      background: #334155;
+      background-image: none;
+    }
+    .btn.secondary:hover { opacity: 0.8; }
+
+    .apikey-hint {
+      font-size: 0.75rem;
+      color: #475569;
+      margin-top: 0.4rem;
+    }
+    .apikey-hint a { color: #3b82f6; text-decoration: none; }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .stat-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 1.1rem 1.3rem;
+    }
+    .slabel { font-size: 0.72rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.4rem; }
+    .svalue { font-size: 1.45rem; font-weight: 700; color: #e2e8f0; }
+    .ssub { font-size: 0.75rem; color: #64748b; margin-top: 0.15rem; }
+    .up { color: #f87171 !important; }
+    .down { color: #4ade80 !important; }
+
+    /* Chart */
+    .chart-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; }
+    .chart-card h2 { font-size: 0.95rem; font-weight: 600; color: #93c5fd; margin-bottom: 1rem; }
+    .chart-wrapper { position: relative; height: 380px; }
+
+    /* Status / Error */
+    .status { text-align: center; padding: 2.5rem; color: #64748b; font-size: 0.88rem; }
+    .spinner {
+      display: inline-block; width: 1.8rem; height: 1.8rem;
+      border: 3px solid #334155; border-top-color: #3b82f6;
+      border-radius: 50%; animation: spin 0.7s linear infinite; margin-bottom: 0.7rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .alert {
+      border-radius: 8px; padding: 0.85rem 1.1rem; font-size: 0.85rem; margin-bottom: 1.5rem;
+    }
+    .alert.error { background: #450a0a; border: 1px solid #7f1d1d; color: #fca5a5; }
+    .alert.info  { background: #0c1a2e; border: 1px solid #1e40af; color: #93c5fd; }
+
+    .source-note { text-align: center; font-size: 0.72rem; color: #475569; padding-bottom: 2rem; }
+    .source-note a { color: #3b82f6; text-decoration: none; }
+
+    .badge {
+      display: inline-block; background: #1d4ed8; color: #fff;
+      font-size: 0.7rem; font-weight: 700; border-radius: 4px;
+      padding: 0.1rem 0.45rem; margin-left: 0.4rem; vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="logo">🛒</span>
+  <div>
+    <h1>食品価格推移トラッカー</h1>
+    <p>e-Stat 小売物価統計調査（動向編）― 実際の小売価格（円）を可視化</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Step 1: API Key -->
+  <div class="card">
+    <div class="card-title">Step 1 ― e-Stat APIキーを入力</div>
+    <div class="row">
+      <div class="field grow">
+        <label>appId（APIキー）</label>
+        <input type="text" id="appId" placeholder="登録して取得したAPIキーをここに貼り付け">
+        <div class="apikey-hint">
+          キーがない場合は <a href="https://www.e-stat.go.jp/api/regist/index" target="_blank">e-Stat APIユーザ登録</a> で無料取得できます（即時発行）
+        </div>
+      </div>
+      <button class="btn" id="loadMetaBtn" onclick="loadMeta()">品目・地域を読み込む</button>
+    </div>
+  </div>
+
+  <div id="metaStatus" class="status" style="display:none"></div>
+  <div id="alertEl" class="alert error" style="display:none"></div>
+
+  <!-- Step 2: Controls -->
+  <div class="card" id="controlsCard" style="display:none">
+    <div class="card-title">Step 2 ― 品目・地域・期間を選択して表示</div>
+    <div class="row">
+      <div class="field grow">
+        <label>品目 <span class="badge" id="itemCount"></span></label>
+        <select id="itemSelect"></select>
+      </div>
+      <div class="field grow">
+        <label>地域 <span class="badge" id="areaCount"></span></label>
+        <select id="areaSelect"></select>
+      </div>
+      <div class="field">
+        <label>開始年</label>
+        <input type="number" id="startYear" value="2015" min="2000" max="2026" style="width:90px">
+      </div>
+      <div class="field">
+        <label>終了年</label>
+        <input type="number" id="endYear" value="2026" min="2000" max="2026" style="width:90px">
+      </div>
+      <button class="btn" id="fetchBtn" onclick="fetchData()">グラフ表示</button>
+    </div>
+  </div>
+
+  <div id="dataStatus" class="status" style="display:none"></div>
+
+  <div id="statsGrid" class="stats-grid" style="display:none">
+    <div class="stat-card">
+      <div class="slabel">最新価格</div>
+      <div class="svalue" id="statLatest">-</div>
+      <div class="ssub" id="statLatestDate">-</div>
+    </div>
+    <div class="stat-card">
+      <div class="slabel">前年同月比</div>
+      <div class="svalue" id="statYoY">-</div>
+      <div class="ssub">年間変化率</div>
+    </div>
+    <div class="stat-card">
+      <div class="slabel">期間最高値</div>
+      <div class="svalue" id="statMax">-</div>
+      <div class="ssub" id="statMaxDate">-</div>
+    </div>
+    <div class="stat-card">
+      <div class="slabel">期間最低値</div>
+      <div class="svalue" id="statMin">-</div>
+      <div class="ssub" id="statMinDate">-</div>
+    </div>
+    <div class="stat-card">
+      <div class="slabel">期間変化率</div>
+      <div class="svalue" id="statChange">-</div>
+      <div class="ssub" id="statChangePeriod">-</div>
+    </div>
+  </div>
+
+  <div class="chart-card" id="chartCard" style="display:none">
+    <h2 id="chartTitle">価格推移</h2>
+    <div class="chart-wrapper">
+      <canvas id="priceChart"></canvas>
+    </div>
+  </div>
+
+  <div class="source-note">
+    データ出典: <a href="https://www.e-stat.go.jp/" target="_blank">e-Stat 政府統計の総合窓口</a>
+    ／ 小売物価統計調査（動向編）主要品目の都市別小売価格 ／ 統計表ID: 0003421913
+  </div>
+</div>
+
+<script>
+// =====================================================================
+// 小売物価統計調査（動向編）主要品目の都市別小売価格
+// statsDataId: 0003421913
+// データ期間: 2000年1月〜（月次）
+// =====================================================================
+const STATS_DATA_ID = '0003421913';
+const ESTAT_BASE = 'https://api.e-stat.go.jp/rest/3.0/app/json';
+
+let metaInfo = null;  // parsed meta
+let catMap = {};      // { paramName: [ {code, name}, ... ] }
+let myChart = null;
+
+// ---- UI helpers ----
+function showMetaStatus(msg) {
+  const el = document.getElementById('metaStatus');
+  el.innerHTML = `<div class="spinner"></div><br>${msg}`;
+  el.style.display = 'block';
+}
+function hideMetaStatus() { document.getElementById('metaStatus').style.display = 'none'; }
+
+function showDataStatus(msg) {
+  const el = document.getElementById('dataStatus');
+  el.innerHTML = `<div class="spinner"></div><br>${msg}`;
+  el.style.display = 'block';
+}
+function hideDataStatus() { document.getElementById('dataStatus').style.display = 'none'; }
+
+function showAlert(msg) {
+  const el = document.getElementById('alertEl');
+  el.innerHTML = msg;
+  el.className = 'alert error';
+  el.style.display = 'block';
+}
+function showInfo(msg) {
+  const el = document.getElementById('alertEl');
+  el.innerHTML = msg;
+  el.className = 'alert info';
+  el.style.display = 'block';
+}
+function hideAlert() { document.getElementById('alertEl').style.display = 'none'; }
+
+function getAppId() {
+  const v = document.getElementById('appId').value.trim();
+  if (!v) throw new Error('APIキーを入力してください（<a href="https://www.e-stat.go.jp/api/regist/index" target="_blank">取得はこちら</a>）');
+  return v;
+}
+
+// ---- e-Stat API ----
+async function estatFetch(endpoint, params) {
+  const appId = getAppId();
+  const qs = new URLSearchParams({ appId, lang: 'J', ...params }).toString();
+  const url = `${ESTAT_BASE}/${endpoint}?${qs}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  // getMetaInfo uses GET_META_INFO, getStatsData uses GET_STATS_DATA
+  const root = json.GET_META_INFO || json.GET_STATS_DATA;
+  if (!root) throw new Error('予期しないAPIレスポンス形式');
+  const status = root.RESULT?.STATUS;
+  if (status !== 0) {
+    const msg = root.RESULT?.ERROR_MSG || 'APIエラー';
+    throw new Error(`e-Stat API エラー (${status}): ${msg}`);
+  }
+  return root;
+}
+
+// ---- Step 1: Load metadata ----
+async function loadMeta() {
+  hideAlert();
+  const btn = document.getElementById('loadMetaBtn');
+  btn.disabled = true;
+  showMetaStatus('メタ情報を取得中...');
+  document.getElementById('controlsCard').style.display = 'none';
+
+  try {
+    const data = await estatFetch('getMetaInfo', { statsDataId: STATS_DATA_ID });
+    const classObjs = data.METADATA_INF?.CLASS_INF?.CLASS_OBJ;
+    if (!classObjs) throw new Error('メタ情報の形式が想定外です');
+
+    const arr = Array.isArray(classObjs) ? classObjs : [classObjs];
+    catMap = {};
+    arr.forEach(obj => {
+      const id = obj['@id'];       // e.g. "cat01", "cat02", "time"
+      const name = obj['@name'];   // e.g. "銘柄", "地域"
+      let classes = obj.CLASS;
+      if (!classes) return;
+      if (!Array.isArray(classes)) classes = [classes];
+      catMap[id] = { name, items: classes.map(c => ({ code: c['@code'], name: c['@name'], level: c['@level'] })) };
+    });
+
+    buildSelects();
+    hideMetaStatus();
+    document.getElementById('controlsCard').style.display = 'block';
+    showInfo(`メタ情報を取得しました。品目・地域を選択してグラフを表示してください。`);
+  } catch(err) {
+    hideMetaStatus();
+    showAlert('メタ情報取得エラー: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---- Build dropdowns from metadata ----
+function buildSelects() {
+  const itemSel = document.getElementById('itemSelect');
+  const areaSel = document.getElementById('areaSelect');
+  itemSel.innerHTML = '';
+  areaSel.innerHTML = '';
+
+  // Find 銘柄 dimension (item/brand) and 地域 dimension (area)
+  // Heuristic: 銘柄 has most items; 地域 has ~95 items
+  let itemKey = null, areaKey = null;
+  for (const [key, val] of Object.entries(catMap)) {
+    if (key === 'time') continue;
+    if (val.name.includes('銘柄') || val.name.includes('品目')) itemKey = key;
+    if (val.name.includes('地域') || val.name.includes('都市')) areaKey = key;
+  }
+  // Fallback: pick by size
+  if (!itemKey || !areaKey) {
+    const keys = Object.keys(catMap).filter(k => k !== 'time');
+    const sorted = keys.sort((a,b) => catMap[b].items.length - catMap[a].items.length);
+    if (!itemKey) itemKey = sorted[0];
+    if (!areaKey) areaKey = sorted[1];
+  }
+
+  window._itemKey = itemKey;
+  window._areaKey = areaKey;
+
+  // Food items: code starts with 1 (1xxx) – food category in this dataset
+  const allItems = catMap[itemKey]?.items || [];
+  const foodItems = allItems.filter(it => {
+    const n = parseInt(it.code);
+    return n >= 1000 && n < 2000;  // food range
+  });
+  const displayItems = foodItems.length > 0 ? foodItems : allItems.slice(0, 200);
+
+  displayItems.forEach(it => {
+    const opt = document.createElement('option');
+    opt.value = it.code;
+    opt.textContent = it.name;
+    itemSel.appendChild(opt);
+  });
+  document.getElementById('itemCount').textContent = displayItems.length + '品目';
+
+  // Area: prefer 全国 or 全国平均
+  const areas = catMap[areaKey]?.items || [];
+  areas.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a.code;
+    opt.textContent = a.name;
+    if (a.name.includes('全国')) opt.selected = true;
+    areaSel.appendChild(opt);
+  });
+  document.getElementById('areaCount').textContent = areas.length + '地域';
+}
+
+// ---- Step 2: Fetch & render data ----
+async function fetchData() {
+  hideAlert();
+  const itemCode = document.getElementById('itemSelect').value;
+  const areaCode = document.getElementById('areaSelect').value;
+  const itemName = document.getElementById('itemSelect').selectedOptions[0]?.text;
+  const areaName = document.getElementById('areaSelect').selectedOptions[0]?.text;
+  const startYear = parseInt(document.getElementById('startYear').value);
+  const endYear   = parseInt(document.getElementById('endYear').value);
+
+  if (!itemCode || !areaCode) { showAlert('品目と地域を選択してください'); return; }
+  if (startYear >= endYear) { showAlert('開始年は終了年より前にしてください'); return; }
+
+  const btn = document.getElementById('fetchBtn');
+  btn.disabled = true;
+  document.getElementById('statsGrid').style.display = 'none';
+  document.getElementById('chartCard').style.display = 'none';
+  showDataStatus(`「${itemName}」（${areaName}）のデータを取得中...`);
+
+  try {
+    const params = {
+      statsDataId: STATS_DATA_ID,
+      startTime: `${startYear}01`,
+      endTime:   `${endYear}12`,
+      metaGetFlg: 'N',
+      cntGetFlg: 'N',
+    };
+    params[`cd${window._itemKey?.toUpperCase() || 'Cat01'}`] = itemCode;
+    params[`cd${window._areaKey?.toUpperCase() || 'Cat02'}`] = areaCode;
+
+    const data = await estatFetch('getStatsData', params);
+    const values = data.STATISTICAL_DATA?.DATA_INF?.VALUE;
+    if (!values || (Array.isArray(values) && values.length === 0)) {
+      throw new Error('指定した条件のデータが見つかりませんでした。品目・地域・期間を変えてお試しください。');
+    }
+
+    const arr = Array.isArray(values) ? values : [values];
+    const points = arr
+      .filter(v => v['$'] && v['$'] !== '-' && v['$'] !== '***')
+      .map(v => {
+        const t = (v['@time'] || '').replace('-', '');
+        const y = parseInt(t.slice(0, 4));
+        const m = parseInt(t.slice(4, 6));
+        return { rawTime: t, label: `${y}年${m}月`, value: parseFloat(v['$']) };
+      })
+      .sort((a, b) => a.rawTime.localeCompare(b.rawTime));
+
+    if (points.length === 0) throw new Error('有効なデータ点が見つかりませんでした。');
+
+    updateStats(points);
+    const title = `${itemName}（${areaName}）`;
+    document.getElementById('chartTitle').textContent = title + ' 価格推移（円）';
+    renderChart(points.map(p => p.label), points.map(p => p.value), title);
+    hideDataStatus();
+
+  } catch(err) {
+    hideDataStatus();
+    showAlert('データ取得エラー: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ---- Stats ----
+function updateStats(points) {
+  document.getElementById('statsGrid').style.display = 'grid';
+  const latest = points[points.length - 1];
+  document.getElementById('statLatest').textContent = latest.value.toLocaleString() + '円';
+  document.getElementById('statLatestDate').textContent = latest.label;
+
+  // YoY
+  const latestYM = latest.rawTime;
+  const yearAgo = points.find(p => {
+    return p.rawTime.slice(4) === latestYM.slice(4) &&
+           parseInt(p.rawTime.slice(0,4)) === parseInt(latestYM.slice(0,4)) - 1;
+  });
+  if (yearAgo) {
+    const yoy = ((latest.value - yearAgo.value) / yearAgo.value * 100).toFixed(1);
+    const el = document.getElementById('statYoY');
+    el.textContent = (yoy > 0 ? '+' : '') + yoy + '%';
+    el.className = 'svalue ' + (parseFloat(yoy) > 0 ? 'up' : 'down');
+  } else {
+    document.getElementById('statYoY').textContent = '-';
+    document.getElementById('statYoY').className = 'svalue';
+  }
+
+  const max = points.reduce((a, b) => a.value > b.value ? a : b);
+  const min = points.reduce((a, b) => a.value < b.value ? a : b);
+  document.getElementById('statMax').textContent = max.value.toLocaleString() + '円';
+  document.getElementById('statMaxDate').textContent = max.label;
+  document.getElementById('statMin').textContent = min.value.toLocaleString() + '円';
+  document.getElementById('statMinDate').textContent = min.label;
+
+  const first = points[0];
+  const change = ((latest.value - first.value) / first.value * 100).toFixed(1);
+  const chEl = document.getElementById('statChange');
+  chEl.textContent = (parseFloat(change) > 0 ? '+' : '') + change + '%';
+  chEl.className = 'svalue ' + (parseFloat(change) > 0 ? 'up' : 'down');
+  document.getElementById('statChangePeriod').textContent = `${first.label}〜${latest.label}`;
+}
+
+// ---- Chart ----
+function renderChart(labels, values, title) {
+  document.getElementById('chartCard').style.display = 'block';
+  const ctx = document.getElementById('priceChart').getContext('2d');
+  if (myChart) myChart.destroy();
+  myChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: title,
+        data: values,
+        borderColor: '#3b82f6',
+        backgroundColor: '#3b82f622',
+        borderWidth: 2.5,
+        pointRadius: labels.length > 60 ? 0 : 3,
+        fill: true,
+        tension: 0.3,
+        spanGaps: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#94a3b8', font: { size: 12 } } },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          borderColor: '#334155',
+          borderWidth: 1,
+          titleColor: '#93c5fd',
+          bodyColor: '#cbd5e1',
+          callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y?.toLocaleString()}円` }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#64748b', maxTicksLimit: 12, maxRotation: 0 },
+          grid: { color: '#1e293b' },
+        },
+        y: {
+          ticks: { color: '#64748b', callback: v => v.toLocaleString() + '円' },
+          grid: { color: '#334155' },
+          title: { display: true, text: '価格（円）', color: '#64748b', font: { size: 11 } },
+        }
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>
