@@ -1,562 +1,561 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>食品価格推移トラッカー（e-Stat）</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Hiragino Sans', 'Meiryo', 'Segoe UI', sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
-      min-height: 100vh;
-    }
-    header {
-      background: linear-gradient(135deg, #1e3a5f 0%, #0f2744 100%);
-      border-bottom: 1px solid #1e40af44;
-      padding: 1.4rem 2rem;
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-    header .logo { font-size: 2rem; }
-    header h1 { font-size: 1.4rem; font-weight: 700; color: #93c5fd; }
-    header p { font-size: 0.8rem; color: #64748b; margin-top: 0.2rem; }
-
-    .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
-
-    .card {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 12px;
-      padding: 1.4rem 1.5rem;
-      margin-bottom: 1.5rem;
-    }
-
-    .card-title {
-      font-size: 0.78rem;
-      font-weight: 700;
-      color: #64748b;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 1rem;
-    }
-
-    .row {
-      display: flex;
-      align-items: flex-end;
-      gap: 1rem;
-      flex-wrap: wrap;
-    }
-
-    .field { display: flex; flex-direction: column; gap: 0.4rem; }
-    .field.grow { flex: 1; min-width: 180px; }
-
-    label {
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: #94a3b8;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    input[type="text"], input[type="number"], select {
-      background: #0f172a;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      color: #e2e8f0;
-      padding: 0.6rem 0.9rem;
-      font-size: 0.9rem;
-      outline: none;
-      transition: border-color 0.2s;
-      width: 100%;
-    }
-    input:focus, select:focus { border-color: #3b82f6; }
-    select option { background: #1e293b; }
-    select:disabled { opacity: 0.5; }
-
-    .btn {
-      background: linear-gradient(135deg, #3b82f6, #2563eb);
-      border: none;
-      border-radius: 8px;
-      color: white;
-      padding: 0.65rem 1.4rem;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.2s;
-      white-space: nowrap;
-    }
-    .btn:hover { opacity: 0.85; }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn.secondary {
-      background: #334155;
-      background-image: none;
-    }
-    .btn.secondary:hover { opacity: 0.8; }
-
-    .apikey-hint {
-      font-size: 0.75rem;
-      color: #475569;
-      margin-top: 0.4rem;
-    }
-    .apikey-hint a { color: #3b82f6; text-decoration: none; }
-
-    /* Stats */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 1rem;
-      margin-bottom: 1.5rem;
-    }
-    .stat-card {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 12px;
-      padding: 1.1rem 1.3rem;
-    }
-    .slabel { font-size: 0.72rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.4rem; }
-    .svalue { font-size: 1.45rem; font-weight: 700; color: #e2e8f0; }
-    .ssub { font-size: 0.75rem; color: #64748b; margin-top: 0.15rem; }
-    .up { color: #f87171 !important; }
-    .down { color: #4ade80 !important; }
-
-    /* Chart */
-    .chart-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; }
-    .chart-card h2 { font-size: 0.95rem; font-weight: 600; color: #93c5fd; margin-bottom: 1rem; }
-    .chart-wrapper { position: relative; height: 380px; }
-
-    /* Status / Error */
-    .status { text-align: center; padding: 2.5rem; color: #64748b; font-size: 0.88rem; }
-    .spinner {
-      display: inline-block; width: 1.8rem; height: 1.8rem;
-      border: 3px solid #334155; border-top-color: #3b82f6;
-      border-radius: 50%; animation: spin 0.7s linear infinite; margin-bottom: 0.7rem;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .alert {
-      border-radius: 8px; padding: 0.85rem 1.1rem; font-size: 0.85rem; margin-bottom: 1.5rem;
-    }
-    .alert.error { background: #450a0a; border: 1px solid #7f1d1d; color: #fca5a5; }
-    .alert.info  { background: #0c1a2e; border: 1px solid #1e40af; color: #93c5fd; }
-
-    .source-note { text-align: center; font-size: 0.72rem; color: #475569; padding-bottom: 2rem; }
-    .source-note a { color: #3b82f6; text-decoration: none; }
-
-    .badge {
-      display: inline-block; background: #1d4ed8; color: #fff;
-      font-size: 0.7rem; font-weight: 700; border-radius: 4px;
-      padding: 0.1rem 0.45rem; margin-left: 0.4rem; vertical-align: middle;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>食品価格下落チェッカー (e-Stat)</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #3498db;
+            --accent: #e74c3c;
+            --bg: #f5f6fa;
+            --text: #2c3e50;
+        }
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: var(--primary);
+            margin-bottom: 20px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            padding: 12px 24px;
+            background-color: var(--secondary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+        #status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+        .status-info { background-color: #e8f4f8; color: #2980b9; }
+        .status-error { background-color: #fcebeb; color: #c0392b; }
+        .status-success { background-color: #e8f8f5; color: #27ae60; }
+        
+        .result-list {
+            list-style: none;
+            padding: 0;
+        }
+        .result-item {
+            background: white;
+            border-bottom: 1px solid #eee;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.2s;
+        }
+        .result-item:hover {
+            transform: translateX(5px);
+            background-color: #fafafa;
+        }
+        .item-name {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .item-unit {
+            font-size: 0.85em;
+            color: #7f8c8d;
+        }
+        .price-drop {
+            text-align: right;
+        }
+        .current-price {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: var(--secondary);
+        }
+        .diff {
+            color: var(--accent);
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        .meta {
+            font-size: 0.8em;
+            color: #95a5a6;
+            margin-top: 5px;
+        }
+    </style>
 </head>
 <body>
 
-<header>
-  <span class="logo">🛒</span>
-  <div>
-    <h1>食品価格推移トラッカー</h1>
-    <p>e-Stat 小売物価統計調査（動向編）― 実際の小売価格（円）を可視化</p>
-  </div>
-</header>
-
 <div class="container">
-
-  <!-- Step 1: API Key -->
-  <div class="card">
-    <div class="card-title">Step 1 ― e-Stat APIキーを入力</div>
-    <div class="row">
-      <div class="field grow">
-        <label>appId（APIキー）</label>
-        <input type="text" id="appId" placeholder="登録して取得したAPIキーをここに貼り付け">
-        <div class="apikey-hint">
-          キーがない場合は <a href="https://www.e-stat.go.jp/api/regist/index" target="_blank">e-Stat APIユーザ登録</a> で無料取得できます（即時発行）
-        </div>
-      </div>
-      <button class="btn" id="loadMetaBtn" onclick="loadMeta()">品目・地域を読み込む</button>
+    <h1>食品価格下落チェッカー 📉</h1>
+    <p>e-Stat（政府統計）の小売物価統計調査APIを利用して、東京都区部で先月より値下がりした食品を探します。</p>
+    
+    <div class="input-group">
+        <input type="password" id="apiKey" placeholder="e-Stat APIキーを入力してください" value="">
+        <select id="areaSelect">
+            <option value="13100">東京都区部</option>
+            <!-- Generated by JS -->
+        </select>
+        <button id="fetchBtn">調査開始</button>
     </div>
-  </div>
 
-  <div id="metaStatus" class="status" style="display:none"></div>
-  <div id="alertEl" class="alert error" style="display:none"></div>
-
-  <!-- Step 2: Controls -->
-  <div class="card" id="controlsCard" style="display:none">
-    <div class="card-title">Step 2 ― 品目・地域・期間を選択して表示</div>
-    <div class="row">
-      <div class="field grow">
-        <label>品目 <span class="badge" id="itemCount"></span></label>
-        <select id="itemSelect"></select>
-      </div>
-      <div class="field grow">
-        <label>地域 <span class="badge" id="areaCount"></span></label>
-        <select id="areaSelect"></select>
-      </div>
-      <div class="field">
-        <label>開始年</label>
-        <input type="number" id="startYear" value="2015" min="2000" max="2026" style="width:90px">
-      </div>
-      <div class="field">
-        <label>終了年</label>
-        <input type="number" id="endYear" value="2026" min="2000" max="2026" style="width:90px">
-      </div>
-      <button class="btn" id="fetchBtn" onclick="fetchData()">グラフ表示</button>
+    <div id="status"></div>
+    <div id="results"></div>
     </div>
-  </div>
 
-  <div id="dataStatus" class="status" style="display:none"></div>
+    <script>
+    const API_BASE = 'https://api.e-stat.go.jp/rest/3.0/app/json';
+    const STATS_CODE = '00200571'; 
 
-  <div id="statsGrid" class="stats-grid" style="display:none">
-    <div class="stat-card">
-      <div class="slabel">最新価格</div>
-      <div class="svalue" id="statLatest">-</div>
-      <div class="ssub" id="statLatestDate">-</div>
-    </div>
-    <div class="stat-card">
-      <div class="slabel">前年同月比</div>
-      <div class="svalue" id="statYoY">-</div>
-      <div class="ssub">年間変化率</div>
-    </div>
-    <div class="stat-card">
-      <div class="slabel">期間最高値</div>
-      <div class="svalue" id="statMax">-</div>
-      <div class="ssub" id="statMaxDate">-</div>
-    </div>
-    <div class="stat-card">
-      <div class="slabel">期間最低値</div>
-      <div class="svalue" id="statMin">-</div>
-      <div class="ssub" id="statMinDate">-</div>
-    </div>
-    <div class="stat-card">
-      <div class="slabel">期間変化率</div>
-      <div class="svalue" id="statChange">-</div>
-      <div class="ssub" id="statChangePeriod">-</div>
-    </div>
-  </div>
+    // Area codes for Prefectural Capitals & Major Cities
+    const AREAS = [
+        {code: '01100', name: '札幌市'}, {code: '02201', name: '青森市'}, {code: '03201', name: '盛岡市'},
+        {code: '04100', name: '仙台市'}, {code: '05201', name: '秋田市'}, {code: '06201', name: '山形市'},
+        {code: '07201', name: '福島市'}, {code: '08201', name: '水戸市'}, {code: '09201', name: '宇都宮市'},
+        {code: '10201', name: '前橋市'}, {code: '11100', name: 'さいたま市'}, {code: '12100', name: '千葉市'},
+        {code: '13100', name: '東京都区部'}, {code: '14100', name: '横浜市'}, {code: '15100', name: '新潟市'},
+        {code: '16201', name: '富山市'}, {code: '17201', name: '金沢市'}, {code: '18201', name: '福井市'},
+        {code: '19201', name: '甲府市'}, {code: '20201', name: '長野市'}, {code: '21201', name: '岐阜市'},
+        {code: '22100', name: '静岡市'}, {code: '23100', name: '名古屋市'}, {code: '24201', name: '津市'},
+        {code: '25201', name: '大津市'}, {code: '26100', name: '京都市'}, {code: '27100', name: '大阪市'},
+        {code: '28100', name: '神戸市'}, {code: '29201', name: '奈良市'}, {code: '30201', name: '和歌山市'},
+        {code: '31201', name: '鳥取市'}, {code: '32201', name: '松江市'}, {code: '33100', name: '岡山市'},
+        {code: '34100', name: '広島市'}, {code: '35203', name: '山口市'}, {code: '36201', name: '徳島市'},
+        {code: '37201', name: '高松市'}, {code: '38201', name: '松山市'}, {code: '39201', name: '高知市'},
+        {code: '40130', name: '福岡市'}, {code: '41201', name: '佐賀市'}, {code: '42201', name: '長崎市'},
+        {code: '43100', name: '熊本市'}, {code: '44201', name: '大分市'}, {code: '45201', name: '宮崎市'},
+        {code: '46201', name: '鹿児島市'}, {code: '47201', name: '那覇市'}
+    ];
 
-  <div class="chart-card" id="chartCard" style="display:none">
-    <h2 id="chartTitle">価格推移</h2>
-    <div class="chart-wrapper">
-      <canvas id="priceChart"></canvas>
-    </div>
-  </div>
+    const statusEl = document.getElementById('status');
+    const resultsEl = document.getElementById('results');
+    const fetchBtn = document.getElementById('fetchBtn');
+    const apiKeyInput = document.getElementById('apiKey');
+    const areaSelect = document.getElementById('areaSelect');
 
-  <div class="source-note">
-    データ出典: <a href="https://www.e-stat.go.jp/" target="_blank">e-Stat 政府統計の総合窓口</a>
-    ／ 小売物価統計調査（動向編）主要品目の都市別小売価格 ／ 統計表ID: 0003421913
-  </div>
-</div>
+    // Populate Area Select
+    areaSelect.innerHTML = AREAS.map(a => `<option value="${a.code}" ${a.code === '13100' ? 'selected' : ''}>${a.name}</option>`).join('');
 
-<script>
-// =====================================================================
-// 小売物価統計調査（動向編）主要品目の都市別小売価格
-// statsDataId: 0003421913
-// データ期間: 2000年1月〜（月次）
-// =====================================================================
-const STATS_DATA_ID = '0003421913';
-const ESTAT_BASE = 'https://api.e-stat.go.jp/rest/3.0/app/json';
-
-let metaInfo = null;  // parsed meta
-let catMap = {};      // { paramName: [ {code, name}, ... ] }
-let myChart = null;
-
-// ---- UI helpers ----
-function showMetaStatus(msg) {
-  const el = document.getElementById('metaStatus');
-  el.innerHTML = `<div class="spinner"></div><br>${msg}`;
-  el.style.display = 'block';
-}
-function hideMetaStatus() { document.getElementById('metaStatus').style.display = 'none'; }
-
-function showDataStatus(msg) {
-  const el = document.getElementById('dataStatus');
-  el.innerHTML = `<div class="spinner"></div><br>${msg}`;
-  el.style.display = 'block';
-}
-function hideDataStatus() { document.getElementById('dataStatus').style.display = 'none'; }
-
-function showAlert(msg) {
-  const el = document.getElementById('alertEl');
-  el.innerHTML = msg;
-  el.className = 'alert error';
-  el.style.display = 'block';
-}
-function showInfo(msg) {
-  const el = document.getElementById('alertEl');
-  el.innerHTML = msg;
-  el.className = 'alert info';
-  el.style.display = 'block';
-}
-function hideAlert() { document.getElementById('alertEl').style.display = 'none'; }
-
-function getAppId() {
-  const v = document.getElementById('appId').value.trim();
-  if (!v) throw new Error('APIキーを入力してください（<a href="https://www.e-stat.go.jp/api/regist/index" target="_blank">取得はこちら</a>）');
-  return v;
-}
-
-// ---- e-Stat API ----
-async function estatFetch(endpoint, params) {
-  const appId = getAppId();
-  const qs = new URLSearchParams({ appId, lang: 'J', ...params }).toString();
-  const url = `${ESTAT_BASE}/${endpoint}?${qs}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const json = await res.json();
-  // getMetaInfo uses GET_META_INFO, getStatsData uses GET_STATS_DATA
-  const root = json.GET_META_INFO || json.GET_STATS_DATA;
-  if (!root) throw new Error('予期しないAPIレスポンス形式');
-  const status = root.RESULT?.STATUS;
-  if (status !== 0) {
-    const msg = root.RESULT?.ERROR_MSG || 'APIエラー';
-    throw new Error(`e-Stat API エラー (${status}): ${msg}`);
-  }
-  return root;
-}
-
-// ---- Step 1: Load metadata ----
-async function loadMeta() {
-  hideAlert();
-  const btn = document.getElementById('loadMetaBtn');
-  btn.disabled = true;
-  showMetaStatus('メタ情報を取得中...');
-  document.getElementById('controlsCard').style.display = 'none';
-
-  try {
-    const data = await estatFetch('getMetaInfo', { statsDataId: STATS_DATA_ID });
-    const classObjs = data.METADATA_INF?.CLASS_INF?.CLASS_OBJ;
-    if (!classObjs) throw new Error('メタ情報の形式が想定外です');
-
-    const arr = Array.isArray(classObjs) ? classObjs : [classObjs];
-    catMap = {};
-    arr.forEach(obj => {
-      const id = obj['@id'];       // e.g. "cat01", "cat02", "time"
-      const name = obj['@name'];   // e.g. "銘柄", "地域"
-      let classes = obj.CLASS;
-      if (!classes) return;
-      if (!Array.isArray(classes)) classes = [classes];
-      catMap[id] = { name, items: classes.map(c => ({ code: c['@code'], name: c['@name'], level: c['@level'] })) };
-    });
-
-    buildSelects();
-    hideMetaStatus();
-    document.getElementById('controlsCard').style.display = 'block';
-    showInfo(`メタ情報を取得しました。品目・地域を選択してグラフを表示してください。`);
-  } catch(err) {
-    hideMetaStatus();
-    showAlert('メタ情報取得エラー: ' + err.message);
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-// ---- Build dropdowns from metadata ----
-function buildSelects() {
-  const itemSel = document.getElementById('itemSelect');
-  const areaSel = document.getElementById('areaSelect');
-  itemSel.innerHTML = '';
-  areaSel.innerHTML = '';
-
-  // Find 銘柄 dimension (item/brand) and 地域 dimension (area)
-  // Heuristic: 銘柄 has most items; 地域 has ~95 items
-  let itemKey = null, areaKey = null;
-  for (const [key, val] of Object.entries(catMap)) {
-    if (key === 'time') continue;
-    if (val.name.includes('銘柄') || val.name.includes('品目')) itemKey = key;
-    if (val.name.includes('地域') || val.name.includes('都市')) areaKey = key;
-  }
-  // Fallback: pick by size
-  if (!itemKey || !areaKey) {
-    const keys = Object.keys(catMap).filter(k => k !== 'time');
-    const sorted = keys.sort((a,b) => catMap[b].items.length - catMap[a].items.length);
-    if (!itemKey) itemKey = sorted[0];
-    if (!areaKey) areaKey = sorted[1];
-  }
-
-  window._itemKey = itemKey;
-  window._areaKey = areaKey;
-
-  // Food items: code starts with 1 (1xxx) – food category in this dataset
-  const allItems = catMap[itemKey]?.items || [];
-  const foodItems = allItems.filter(it => {
-    const n = parseInt(it.code);
-    return n >= 1000 && n < 2000;  // food range
-  });
-  const displayItems = foodItems.length > 0 ? foodItems : allItems.slice(0, 200);
-
-  displayItems.forEach(it => {
-    const opt = document.createElement('option');
-    opt.value = it.code;
-    opt.textContent = it.name;
-    itemSel.appendChild(opt);
-  });
-  document.getElementById('itemCount').textContent = displayItems.length + '品目';
-
-  // Area: prefer 全国 or 全国平均
-  const areas = catMap[areaKey]?.items || [];
-  areas.forEach(a => {
-    const opt = document.createElement('option');
-    opt.value = a.code;
-    opt.textContent = a.name;
-    if (a.name.includes('全国')) opt.selected = true;
-    areaSel.appendChild(opt);
-  });
-  document.getElementById('areaCount').textContent = areas.length + '地域';
-}
-
-// ---- Step 2: Fetch & render data ----
-async function fetchData() {
-  hideAlert();
-  const itemCode = document.getElementById('itemSelect').value;
-  const areaCode = document.getElementById('areaSelect').value;
-  const itemName = document.getElementById('itemSelect').selectedOptions[0]?.text;
-  const areaName = document.getElementById('areaSelect').selectedOptions[0]?.text;
-  const startYear = parseInt(document.getElementById('startYear').value);
-  const endYear   = parseInt(document.getElementById('endYear').value);
-
-  if (!itemCode || !areaCode) { showAlert('品目と地域を選択してください'); return; }
-  if (startYear >= endYear) { showAlert('開始年は終了年より前にしてください'); return; }
-
-  const btn = document.getElementById('fetchBtn');
-  btn.disabled = true;
-  document.getElementById('statsGrid').style.display = 'none';
-  document.getElementById('chartCard').style.display = 'none';
-  showDataStatus(`「${itemName}」（${areaName}）のデータを取得中...`);
-
-  try {
-    const params = {
-      statsDataId: STATS_DATA_ID,
-      startTime: `${startYear}01`,
-      endTime:   `${endYear}12`,
-      metaGetFlg: 'N',
-      cntGetFlg: 'N',
-    };
-    params[`cd${window._itemKey?.toUpperCase() || 'Cat01'}`] = itemCode;
-    params[`cd${window._areaKey?.toUpperCase() || 'Cat02'}`] = areaCode;
-
-    const data = await estatFetch('getStatsData', params);
-    const values = data.STATISTICAL_DATA?.DATA_INF?.VALUE;
-    if (!values || (Array.isArray(values) && values.length === 0)) {
-      throw new Error('指定した条件のデータが見つかりませんでした。品目・地域・期間を変えてお試しください。');
+    function showStatus(msg, type = 'info') {
+        statusEl.style.display = 'block';
+        statusEl.className = `status-${type}`;
+        statusEl.textContent = msg;
     }
 
-    const arr = Array.isArray(values) ? values : [values];
-    const points = arr
-      .filter(v => v['$'] && v['$'] !== '-' && v['$'] !== '***')
-      .map(v => {
-        const t = (v['@time'] || '').replace('-', '');
-        const y = parseInt(t.slice(0, 4));
-        const m = parseInt(t.slice(4, 6));
-        return { rawTime: t, label: `${y}年${m}月`, value: parseFloat(v['$']) };
-      })
-      .sort((a, b) => a.rawTime.localeCompare(b.rawTime));
+    fetchBtn.addEventListener('click', async () => {
+        const apiKey = apiKeyInput.value.trim();
+        const areaCode = areaSelect.value;
+        const areaName = areaSelect.options[areaSelect.selectedIndex].text;
 
-    if (points.length === 0) throw new Error('有効なデータ点が見つかりませんでした。');
-
-    updateStats(points);
-    const title = `${itemName}（${areaName}）`;
-    document.getElementById('chartTitle').textContent = title + ' 価格推移（円）';
-    renderChart(points.map(p => p.label), points.map(p => p.value), title);
-    hideDataStatus();
-
-  } catch(err) {
-    hideDataStatus();
-    showAlert('データ取得エラー: ' + err.message);
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-// ---- Stats ----
-function updateStats(points) {
-  document.getElementById('statsGrid').style.display = 'grid';
-  const latest = points[points.length - 1];
-  document.getElementById('statLatest').textContent = latest.value.toLocaleString() + '円';
-  document.getElementById('statLatestDate').textContent = latest.label;
-
-  // YoY
-  const latestYM = latest.rawTime;
-  const yearAgo = points.find(p => {
-    return p.rawTime.slice(4) === latestYM.slice(4) &&
-           parseInt(p.rawTime.slice(0,4)) === parseInt(latestYM.slice(0,4)) - 1;
-  });
-  if (yearAgo) {
-    const yoy = ((latest.value - yearAgo.value) / yearAgo.value * 100).toFixed(1);
-    const el = document.getElementById('statYoY');
-    el.textContent = (yoy > 0 ? '+' : '') + yoy + '%';
-    el.className = 'svalue ' + (parseFloat(yoy) > 0 ? 'up' : 'down');
-  } else {
-    document.getElementById('statYoY').textContent = '-';
-    document.getElementById('statYoY').className = 'svalue';
-  }
-
-  const max = points.reduce((a, b) => a.value > b.value ? a : b);
-  const min = points.reduce((a, b) => a.value < b.value ? a : b);
-  document.getElementById('statMax').textContent = max.value.toLocaleString() + '円';
-  document.getElementById('statMaxDate').textContent = max.label;
-  document.getElementById('statMin').textContent = min.value.toLocaleString() + '円';
-  document.getElementById('statMinDate').textContent = min.label;
-
-  const first = points[0];
-  const change = ((latest.value - first.value) / first.value * 100).toFixed(1);
-  const chEl = document.getElementById('statChange');
-  chEl.textContent = (parseFloat(change) > 0 ? '+' : '') + change + '%';
-  chEl.className = 'svalue ' + (parseFloat(change) > 0 ? 'up' : 'down');
-  document.getElementById('statChangePeriod').textContent = `${first.label}〜${latest.label}`;
-}
-
-// ---- Chart ----
-function renderChart(labels, values, title) {
-  document.getElementById('chartCard').style.display = 'block';
-  const ctx = document.getElementById('priceChart').getContext('2d');
-  if (myChart) myChart.destroy();
-  myChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: title,
-        data: values,
-        borderColor: '#3b82f6',
-        backgroundColor: '#3b82f622',
-        borderWidth: 2.5,
-        pointRadius: labels.length > 60 ? 0 : 3,
-        fill: true,
-        tension: 0.3,
-        spanGaps: true,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { labels: { color: '#94a3b8', font: { size: 12 } } },
-        tooltip: {
-          backgroundColor: '#1e293b',
-          borderColor: '#334155',
-          borderWidth: 1,
-          titleColor: '#93c5fd',
-          bodyColor: '#cbd5e1',
-          callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y?.toLocaleString()}円` }
+        if (!apiKey) {
+            showStatus('APIキーを入力してください。', 'error');
+            return;
         }
-      },
-      scales: {
-        x: {
-          ticks: { color: '#64748b', maxTicksLimit: 12, maxRotation: 0 },
-          grid: { color: '#1e293b' },
-        },
-        y: {
-          ticks: { color: '#64748b', callback: v => v.toLocaleString() + '円' },
-          grid: { color: '#334155' },
-          title: { display: true, text: '価格（円）', color: '#64748b', font: { size: 11 } },
-        }
-      }
-    }
-  });
-}
-</script>
-</body>
-</html>
+
+        try {
+            showStatus('統計表リストを取得中...');
+            fetchBtn.disabled = true;
+            resultsEl.innerHTML = '';
+
+            // 1. Get Stats List
+            // Remove searchWord to get a broader list, then filter client-side
+            const listUrl = `${API_BASE}/getStatsList?appId=${apiKey}&statsCode=${STATS_CODE}&searchKind=1&limit=100`;
+            const listResp = await fetch(listUrl);
+
+            if (!listResp.ok) throw new Error(`API Error: ${listResp.status}`);
+            const listData = await listResp.json();
+
+            if (listData.GET_STATS_LIST.RESULT.STATUS !== 0) {
+                const msg = listData.GET_STATS_LIST.RESULT.ERROR_MSG;
+                throw new Error(`API Error: ${msg}`);
+            }
+
+            if (!listData.GET_STATS_LIST.DATALIST_INF || !listData.GET_STATS_LIST.DATALIST_INF.TABLE_INF) {
+                 throw new Error('統計表が見つかりませんでした。');
+            }
+
+            let tables = listData.GET_STATS_LIST.DATALIST_INF.TABLE_INF;
+            if (!Array.isArray(tables)) {
+                tables = [tables];
+            }
+
+            // Helper to safely get title string
+            const getTitle = (t) => {
+                if (!t || !t.TITLE) return '';
+                if (typeof t.TITLE === 'string') return t.TITLE;
+                if (typeof t.TITLE === 'object' && t.TITLE['$']) return t.TITLE['$'];
+                return JSON.stringify(t.TITLE); 
+            };
+
+            // Score tables to find the best one
+            // We want: "Major Items" (主要品目), "City-based" (都市別), "Retail Price" (小売価格)
+            // And definitely "Food" related if possible, but "Major Items" usually covers food.
+            const scoredTables = tables.map(t => {
+                let score = 0;
+                const title = getTitle(t);
+
+                if (title.includes('主要品目')) score += 10;
+                if (title.includes('都市別')) score += 5;
+                if (title.includes('小売価格')) score += 2;
+                if (title.includes('食料')) score += 3; // Bonus
+                if (t.SURVEY_DATE) score += 1; // Must have date
+
+                return { table: t, score, title };
+            });
+
+            // Sort by Score desc, then Date desc
+            scoredTables.sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                return (b.table.SURVEY_DATE || 0) - (a.table.SURVEY_DATE || 0);
+            });
+
+            const best = scoredTables[0];
+            if (best.score < 5) {
+                 // Try to list top 3 titles for debug
+                 const candidates = scoredTables.slice(0, 3).map(x => x.title).join(', ');
+                 throw new Error(`適切な統計表が見つかりませんでした。(候補: ${candidates})`);
+            }
+
+            const targetTable = best.table;
+            const tableId = targetTable['@id'];
+            const tableTitle = best.title;
+
+            showStatus(`統計表「${tableTitle}」から最新データを取得中...`);            // 2. Get Meta Info to find the latest time points
+            const metaUrl = `${API_BASE}/getStatsData?appId=${apiKey}&statsDataId=${tableId}&limit=1`;
+            const metaResp = await fetch(metaUrl);
+            const metaJson = await metaResp.json();
+
+            if (metaJson.GET_STATS_DATA.RESULT.STATUS !== 0) {
+                throw new Error('メタデータの取得に失敗しました。');
+            }
+
+            const classObj = metaJson.GET_STATS_DATA.STATISTICAL_DATA.CLASS_INF.CLASS_OBJ;
+            // Find time class
+            let timeObj = classObj.find(c => c['@id'] === 'time');
+            if (!timeObj) {
+                 timeObj = classObj.find(c => Array.isArray(c.CLASS) && c.CLASS[0] && c.CLASS[0]['@code'].length >= 6 && !isNaN(c.CLASS[0]['@code']));
+            }
+
+            if (!timeObj || !timeObj.CLASS) {
+                 throw new Error('時間軸データが見つかりませんでした。');
+            }
+
+            const timeList = Array.isArray(timeObj.CLASS) ? timeObj.CLASS : [timeObj.CLASS];
+            // Sort by code descending
+            const sortedTimes = timeList.sort((a, b) => b['@code'].localeCompare(a['@code']));
+
+            if (sortedTimes.length < 2) {
+                throw new Error('比較可能な過去データ（2ヶ月分）がありません。');
+            }
+
+            const latestTime = sortedTimes[0];
+            const prevTime = sortedTimes[1];
+
+            showStatus(`データ取得中... (${prevTime['@name']} → ${latestTime['@name']} @ ${areaName})`);
+
+            // 3. Fetch Actual Data
+            const dataUrl = `${API_BASE}/getStatsData?appId=${apiKey}&statsDataId=${tableId}&cdArea=${areaCode}&cdTime=${latestTime['@code']},${prevTime['@code']}&limit=100000`;
+            const dataResp = await fetch(dataUrl);
+            const dataJson = await dataResp.json();
+
+            if (dataJson.GET_STATS_DATA.RESULT.STATUS !== 0) {
+                 throw new Error('データの取得に失敗しました。');
+            }
+
+            const statsData = dataJson.GET_STATS_DATA.STATISTICAL_DATA;
+            if (!statsData.DATA_INF) {
+                throw new Error(`データが見つかりませんでした。（${areaName}のデータがない可能性があります）`);
+            }
+
+            const values = Array.isArray(statsData.DATA_INF.VALUE) ? statsData.DATA_INF.VALUE : [statsData.DATA_INF.VALUE];
+
+            // Identify Item Class dynamically
+            const classObjList = statsData.CLASS_INF.CLASS_OBJ;
+            let itemClassObj = classObjList.find(c => c['@name'] && c['@name'].includes('品目'));
+
+            // Fallback: Find the class with the most items (excluding Time and Area)
+            if (!itemClassObj) {
+                let maxLen = 0;
+                classObjList.forEach(c => {
+                    if (c['@id'] === 'time' || c['@id'] === 'area' || c['@name'] === '時間軸' || c['@name'] === '地域') return;
+                    const len = Array.isArray(c.CLASS) ? c.CLASS.length : 1;
+                    if (len > maxLen) {
+                        maxLen = len;
+                        itemClassObj = c;
+                    }
+                });
+            }
+
+            if (!itemClassObj) {
+                // Last resort: cat01
+                itemClassObj = classObjList.find(c => c['@id'] === 'cat01');
+            }
+
+            if (!itemClassObj) {
+                throw new Error('品目情報（Item Class）が特定できませんでした。');
+            }
+
+            const itemClassId = itemClassObj['@id']; // e.g., "cat01"
+
+            const itemMap = new Map();
+            if (itemClassObj.CLASS) {
+                const arr = Array.isArray(itemClassObj.CLASS) ? itemClassObj.CLASS : [itemClassObj.CLASS];
+                arr.forEach(c => itemMap.set(c['@code'], { name: c['@name'], unit: c['@unit'] }));
+            }
+
+            // Process Data
+            const currentPrices = new Map();
+            const prevPrices = new Map();
+            let processCount = 0;
+
+            // Food Filter Logic
+            const isFoodItem = (name) => {
+                // Exclusion List (Non-Food)
+                const excludes = [
+                    '家賃', '電気', 'ガス', '水道', '工事', '修理', '運賃', '料金', '料', '費', // Utilities/Services
+                    '被服', 'シャツ', '下着', '靴', '服', '着', '帯', '傘', // Clothing
+                    '洗剤', '殺虫', 'ペーパー', 'おむつ', '石けん', 'シャンプー', '化粧', // Daily goods
+                    '診療', '薬', 'コンタクト', '眼鏡', '保健', // Medical
+                    '授業', '月謝', '教科書', '講習', // Education
+                    '自動車', 'ガソリン', '灯油', 'タイヤ', // Transport/Fuel
+                    'テレビ', 'パソコン', 'カメラ', '机', '椅子', '時計', 'エアコン', '冷蔵庫', '洗濯機', // Durables
+                    'たばこ', '新聞', '宿泊', '理髪', 'パーマ', 'カット', '写真', '放送' // Misc/Services
+                ];
+
+                // Inclusion List (Food) - If it hits exclusion, it's out. If not, check inclusion.
+                // Note: Some food items might contain "料" (e.g. 飲料). We handle specific overrides or order.
+                // Actually, "飲料" contains "料". So we must be careful.
+                // Strategy: Check POSITIVE matches first? No, "トイレットペーパー" might match "ペーパー".
+
+                // Refined Strategy:
+                // 1. Check strict exclusions (things that are definitely not food)
+                if (name.includes('家賃') || name.includes('電気代') || name.includes('ガス代') || 
+                    name.includes('水道') || name.includes('交通') || name.includes('通信') || 
+                    name.includes('授業') || name.includes('月謝') || name.includes('観覧') ||
+                    name.includes('宿泊') || name.includes('理髪') || name.includes('パーマ') ||
+                    (name.includes('機器') && !name.includes('調理')) || // Exclude devices
+                    name.includes('修理') || name.includes('工事')) return false;
+
+                // 2. Check "Explicit Non-Food Goods"
+                const nonFoodGoods = [
+                    '洗剤', 'ペーパー', 'ラップ', 'おむつ', '生理用品', '化粧', 'シャンプー', '石けん', 
+                    'タオル', '殺虫', '防虫', '電池', '電球', '花', '植木', 'えさ', 'たばこ',
+                    'シャツ', 'ソックス', '下着', 'セーター', '背広', 'スカート', 'ズボン', '靴',
+                    'テレビ', 'パソコン', 'レコーダー', 'カメラ', 'ピアノ', '机', '椅子', '時計',
+                    '冷蔵庫', '洗濯機', '掃除機', 'エアコン', 'ストーブ', 'こたつ', 'ガソリン', '灯油'
+                ];
+                if (nonFoodGoods.some(k => name.includes(k))) return false;
+
+                // 3. Check "Food keywords"
+                // If it wasn't excluded, is it food?
+                // Many food items are simple: "食パン", "まぐろ".
+                // But some are "外食" (Eating out) - user might want this or not. Usually "Food" includes eating out in CPI.
+                // Let's assume if it passed the exclusions, and it's in the "Retail Price Survey", it's likely food or daily necessity.
+                // To be safe, let's require a food keyword OR assume everything else is food?
+                // No, "ノート" (Notebook) exists.
+
+                const foodKeywords = [
+                    '米', 'パン', '麺', '粉', '麦', '餅', 'シリアル',
+                    '魚', '貝', '海藻', '刺身', 'すし', '寿司', 'カツオ', 'サケ', 'イカ', 'エビ', 'カニ',
+                    '肉', '牛', '豚', '鶏', 'ハム', 'ソーセージ', 'ベーコン',
+                    '乳', '牛', 'チーズ', 'バター', 'マーガリン', 'ヨーグルト', '卵',
+                    '野菜', '菜', '芋', '豆', 'きのこ', '筍', 'コーン',
+                    '果物', '実', 'りんご', 'みかん', 'バナナ', 'いちご', 'ぶどう', '梨', '桃',
+                    '油', '調味', '塩', '砂糖', '醤油', '味噌', '酢', 'ソース', 'ケチャップ', 'マヨネーズ', 'ドレッシング', 'ジャム', 'カレー', 'スープ', '素',
+                    '菓子', 'ケーキ', 'プリン', 'ゼリー', 'アイス', 'チョコ', 'あめ', 'せんべい', 'スナック',
+                    '飲料', '茶', 'コーヒー', 'ジュース', '水', '酒', 'ビール', 'ワイン', '焼酎',
+                    '弁当', 'おにぎり', 'サンドイッチ', 'ハンバーガー', '牛丼', 'ラーメン', 'ランチ', '定食', '食事'
+                ];
+
+                if (foodKeywords.some(k => name.includes(k))) return true;
+
+                // 4. Special Allowlist for items that might be missed
+                const specialAllow = ['豆腐', '納豆', 'こんにゃく', '梅干し', 'かつお節', '餃子', 'シューマイ', 'コロッケ', '天ぷら', 'うなぎ蒲焼'];
+                if (specialAllow.some(k => name.includes(k))) return true;
+
+                return false;
+            };
+
+            values.forEach(v => {
+                const itemCode = v[`@${itemClassId}`]; // Use dynamic ID
+                const timeCode = v['@time'] || v['@catTime']; // Try common time IDs
+                const price = parseFloat(v['$']);
+
+                if (isNaN(price)) return;
+
+                if (!itemMap.has(itemCode)) return;
+                const info = itemMap.get(itemCode);
+
+                // Filter Non-Food
+                if (!isFoodItem(info.name)) return;
+
+                processCount++;
+
+                // Match time code
+                if (timeCode === latestTime['@code']) {
+                    currentPrices.set(itemCode, { ...info, price });
+                } else if (timeCode === prevTime['@code']) {
+                    prevPrices.set(itemCode, { ...info, price });
+                }
+            });
+            // Compare
+            showStatus(`データを分析中... (取得レコード数: ${values.length}, 有効データ: ${processCount})`);
+            const comparison = comparePricesDetailed(currentPrices, prevPrices);
+
+            renderResultsDetailed(comparison, latestTime['@name'], prevTime['@name'], areaName, tableTitle);
+
+            if (comparison.dropped.length > 0) {
+                showStatus(`分析完了: ${comparison.dropped.length}件の値下がり食品が見つかりました。`, 'success');
+            } else {
+                showStatus(`分析完了: 値下がりした品目はありませんでした。`, 'info');
+            }
+
+            } catch (err) {
+            console.error(err);
+            showStatus(`エラーが発生しました: ${err.message}`, 'error');
+            if (err.message.includes('Failed to fetch')) {
+                showStatus('CORSエラーの可能性があります。ブラウザのセキュリティ設定を確認するか、ローカルサーバー経由で実行してください。', 'error');
+            }
+            } finally {
+            fetchBtn.disabled = false;
+            }
+            });
+
+            function comparePricesDetailed(currentMap, prevMap) {
+            const dropped = [];
+            const rose = [];
+            const same = [];
+
+            currentMap.forEach((currItem, code) => {
+            if (prevMap.has(code)) {
+                const prevItem = prevMap.get(code);
+                const diff = currItem.price - prevItem.price;
+                const percent = (diff / prevItem.price) * 100;
+
+                const itemData = {
+                    name: currItem.name,
+                    unit: currItem.unit,
+                    currentPrice: currItem.price,
+                    prevPrice: prevItem.price,
+                    diff: diff,
+                    percent: percent
+                };
+
+                if (diff < 0) {
+                    dropped.push(itemData);
+                } else if (diff > 0) {
+                    rose.push(itemData);
+                } else {
+                    same.push(itemData);
+                }
+            }
+            });
+
+            dropped.sort((a, b) => a.percent - b.percent); // Largest drop % first
+            rose.sort((a, b) => b.percent - a.percent);     // Largest rise % first
+
+            return { dropped, rose, same, total: dropped.length + rose.length + same.length };
+            }
+
+            function renderResultsDetailed(comparison, currDateName, prevDateName, areaName, tableTitle) {
+            const { dropped, rose, same, total } = comparison;
+
+            let html = `
+            <div style="background:#f8f9fa; padding:15px; border-radius:5px; margin-bottom:20px; border:1px solid #e9ecef;">
+                <h3 style="margin-top:0; font-size:1.1em; color:#2c3e50;">📊 市場分析レポート</h3>
+                <p style="margin:5px 0; font-size:0.9em; color:#666;">
+                    <strong>データ出典:</strong> ${tableTitle}<br>
+                    <strong>比較期間:</strong> ${prevDateName} → ${currDateName}<br>
+                    <strong>調査地域:</strong> ${areaName}<br>
+                    <strong>総比較品目数:</strong> ${total} 品目
+                </p>
+                <div style="display:flex; gap:15px; margin-top:10px; font-size:0.9em;">
+                    <span style="color:#27ae60; font-weight:bold;">↘ 値下がり: ${dropped.length}</span>
+                    <span style="color:#e74c3c; font-weight:bold;">↗ 値上がり: ${rose.length}</span>
+                    <span style="color:#7f8c8d; font-weight:bold;">→ 変わらず: ${same.length}</span>
+                </div>
+            </div>
+            `;
+            if (dropped.length > 0) {
+            html += `<h4 style="color:#27ae60;">値下がりした食品・品目</h4>`;
+            html += `<ul class="result-list">`;
+            html += dropped.map(item => `
+                <li class="result-item">
+                    <div>
+                        <div class="item-name">${item.name}</div>
+                        <div class="item-unit">${item.unit || ''}</div>
+                    </div>
+                    <div class="price-drop">
+                        <div class="current-price">¥${item.currentPrice.toLocaleString()}</div>
+                        <div class="diff">↘ ¥${Math.abs(item.diff).toLocaleString()} (${Math.abs(item.percent).toFixed(1)}%)</div>
+                    </div>
+                </li>
+            `).join('');
+            html += `</ul>`;
+            } else {
+            html += `
+                <div style="text-align:center; padding:30px; background:#fff; border:1px dashed #ccc; color:#7f8c8d;">
+                    <p>この期間に値下がりした主要品目はありませんでした。</p>
+                </div>
+            `;
+            }
+
+            // Optional: Show top price increases if no drops found, to prove data exists
+            if (dropped.length === 0 && rose.length > 0) {
+            html += `<h4 style="color:#e74c3c; margin-top:30px;">参考: 値上がりした品目 (上位5件)</h4>`;
+            html += `<ul class="result-list">`;
+            html += rose.slice(0, 5).map(item => `
+                <li class="result-item" style="border-left: 3px solid #e74c3c;">
+                    <div>
+                        <div class="item-name">${item.name}</div>
+                        <div class="item-unit">${item.unit || ''}</div>
+                    </div>
+                    <div class="price-drop">
+                        <div class="current-price" style="color:#e74c3c;">¥${item.currentPrice.toLocaleString()}</div>
+                        <div class="diff" style="color:#e74c3c;">↗ ¥${Math.abs(item.diff).toLocaleString()} (+${Math.abs(item.percent).toFixed(1)}%)</div>
+                    </div>
+                </li>
+            `).join('');
+            html += `</ul>`;
+            }
+
+            resultsEl.innerHTML = html;
+            }    /* Previous code removed to avoid duplication/confusion, keeping only the above script block and body closing */
+    </script>
+
+    </body>
+    </html>
